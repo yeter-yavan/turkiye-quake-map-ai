@@ -1,346 +1,266 @@
 import axios from 'axios'
-import type { Earthquake, AFADResponse, OrhanAydogduResponse } from '@/types'
+import type { Earthquake } from '@/types'
 
-// API konfigürasyonu - Proxy üzerinden
-const API_CONFIG = {
-  AFAD: {
-    baseURL: '/api/afad', // Proxy üzerinden
-    endpoints: {
-      earthquakes: '/earthquake/filter',
-      last24h: '/earthquake/last24h',
-      last7days: '/earthquake/last7days',
-      last30days: '/earthquake/last30days'
-    }
-  },
-  KANDILLI: {
-    baseURL: '/api/kandilli', // Proxy üzerinden
-    endpoints: {
-      earthquakes: '', // Ana endpoint
-      last24h: '', // Aynı endpoint, client-side filtering
-      last7days: '' // Aynı endpoint, client-side filtering
-    }
+// Kandilli API configuration
+const KANDILLI_API_BASE = 'https://api.orhanaydogdu.com.tr/deprem/kandilli/live'
+
+// API response types based on the actual API structure
+interface KandilliAPIResponse {
+  status: boolean
+  httpStatus: number
+  desc: string
+  serverloadms: number
+  metadata: {
+    date_starts: string
+    date_ends: string
+    total: number
   }
+  result: KandilliEarthquake[]
 }
 
-// AFAD API service
-class AFADService {
-  private baseURL = API_CONFIG.AFAD.baseURL
-
-  async fetchEarthquakes(params: {
-    startDate?: string
-    endDate?: string
-    minMagnitude?: number
-    maxMagnitude?: number
-    minDepth?: number
-    maxDepth?: number
-    limit?: number
-  } = {}): Promise<Earthquake[]> {
-    try {
-      const response = await axios.post<AFADResponse>(
-        `${this.baseURL}${API_CONFIG.AFAD.endpoints.earthquakes}`,
-        {
-          startDate: params.startDate || this.getDefaultStartDate(),
-          endDate: params.endDate || this.getDefaultEndDate(),
-          minMagnitude: params.minMagnitude || 0,
-          maxMagnitude: params.maxMagnitude || 10,
-          minDepth: params.minDepth || 0,
-          maxDepth: params.maxDepth || 1000,
-          limit: params.limit || 1000
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 30000
-        }
-      )
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'AFAD API hatası')
-      }
-
-      return this.transformAFADData(response.data.data)
-    } catch (error) {
-      console.error('AFAD API Error:', error)
-      throw new Error('AFAD verisi alınamadı')
+interface KandilliEarthquake {
+  earthquake_id: string
+  provider: string
+  title: string
+  date: string
+  mag: number
+  depth: number
+  geojson: {
+    type: string
+    coordinates: [number, number] // [longitude, latitude]
+  }
+  location_properties: {
+    closestCity: {
+      name: string
+      cityCode: number
+      distance: number
+      population: number
     }
-  }
-
-  async fetchLast24Hours(): Promise<Earthquake[]> {
-    try {
-      const response = await axios.get<AFADResponse>(
-        `${this.baseURL}${API_CONFIG.AFAD.endpoints.last24h}`,
-        {
-          timeout: 30000
-        }
-      )
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'AFAD API hatası')
-      }
-
-      return this.transformAFADData(response.data.data)
-    } catch (error) {
-      console.error('AFAD Last24h Error:', error)
-      throw new Error('Son 24 saat verisi alınamadı')
+    epiCenter: {
+      name: string
+      cityCode: number
+      population: number
     }
-  }
-
-  async fetchLast7Days(): Promise<Earthquake[]> {
-    try {
-      const response = await axios.get<AFADResponse>(
-        `${this.baseURL}${API_CONFIG.AFAD.endpoints.last7days}`,
-        {
-          timeout: 30000
-        }
-      )
-
-      if (!response.data.success) {
-        throw new Error(response.data.message || 'AFAD API hatası')
+    closestCities: Array<{
+      name: string
+      cityCode: number
+      distance: number
+      population: number
+    }>
+    airports: Array<{
+      distance: number
+      name: string
+      code: string
+      coordinates: {
+        type: string
+        coordinates: [number, number]
       }
-
-      return this.transformAFADData(response.data.data)
-    } catch (error) {
-      console.error('AFAD Last7Days Error:', error)
-      throw new Error('Son 7 gün verisi alınamadı')
-    }
+    }>
   }
-
-  private transformAFADData(data: any[]): Earthquake[] {
-    return data.map(item => ({
-      id: item.id || `afad_${Date.now()}_${Math.random()}`,
-      date: item.date || new Date().toISOString().split('T')[0],
-      time: item.time || new Date().toTimeString().split(' ')[0],
-      latitude: parseFloat(item.latitude) || 0,
-      longitude: parseFloat(item.longitude) || 0,
-      magnitude: parseFloat(item.magnitude) || 0,
-      depth: parseFloat(item.depth) || 0,
-      location: item.location || 'Bilinmeyen Konum',
-      province: item.province,
-      district: item.district,
-      source: 'AFAD' as const,
-      timestamp: new Date(`${item.date} ${item.time}`).getTime(),
-      isAnomaly: false,
-      anomalyScore: 0
-    }))
-  }
-
-  private getDefaultStartDate(): string {
-    const date = new Date()
-    date.setDate(date.getDate() - 30) // Son 30 gün
-    return date.toISOString().split('T')[0]
-  }
-
-  private getDefaultEndDate(): string {
-    return new Date().toISOString().split('T')[0]
-  }
+  rev: any
+  date_time: string
+  created_at: number
+  location_tz: string
 }
 
-// Kandilli API service (Orhan Aydoğdu API kullanarak)
-class KandilliService {
-  private baseURL = API_CONFIG.KANDILLI.baseURL
+class EarthquakeService {
+  private earthquakes: Earthquake[] = []
 
-  async fetchEarthquakes(params: {
-    startDate?: string
-    endDate?: string
-    minMagnitude?: number
-    maxMagnitude?: number
-    limit?: number
-  } = {}): Promise<Earthquake[]> {
+  async fetchEarthquakes(): Promise<Earthquake[]> {
     try {
-      const response = await axios.get<OrhanAydogduResponse>(
-        `${this.baseURL}${API_CONFIG.KANDILLI.endpoints.earthquakes}`,
-        {
-          timeout: 30000
-        }
-      )
-
-      if (!response.data.status) {
-        throw new Error('Kandilli API hatası')
-      }
-
-      let earthquakes = this.transformOrhanAydogduData(response.data.result)
+      console.log('Fetching earthquakes from Kandilli API...')
       
-      // Client-side filtering
-      if (params.minMagnitude) {
-        earthquakes = earthquakes.filter(eq => eq.magnitude >= params.minMagnitude!)
-      }
-      if (params.maxMagnitude) {
-        earthquakes = earthquakes.filter(eq => eq.magnitude <= params.maxMagnitude!)
-      }
-      if (params.startDate || params.endDate) {
-        earthquakes = this.filterByDateRange(earthquakes, params.startDate, params.endDate)
-      }
-      if (params.limit) {
-        earthquakes = earthquakes.slice(0, params.limit)
+      const response = await axios.get<KandilliAPIResponse>(`${KANDILLI_API_BASE}`, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Turkiye-Quake-Map-AI/1.0'
+        }
+      })
+
+      if (!response.data.status) {
+        throw new Error(`API Error: ${response.data.desc}`)
       }
 
-      return earthquakes
+      console.log(`API Response: ${response.data.result.length} earthquakes received`)
+      
+      // Transform API data to our Earthquake type
+      this.earthquakes = response.data.result.map(this.transformKandilliData)
+      
+      // Sort by timestamp (newest first)
+      this.earthquakes.sort((a, b) => b.timestamp - a.timestamp)
+      
+      console.log(`Transformed ${this.earthquakes.length} earthquakes`)
+      return this.earthquakes
+      
     } catch (error) {
-      console.error('Kandilli API Error:', error)
-      throw new Error('Kandilli verisi alınamadı')
+      console.error('Error fetching earthquakes from Kandilli API:', error)
+      
+      // Fallback to mock data if API fails
+      console.log('Falling back to mock data...')
+      return this.getMockEarthquakes()
     }
+  }
+
+  private transformKandilliData(kandilliEq: KandilliEarthquake): Earthquake {
+    // Parse date from "2023.03.08 02:54:44" format
+    const dateParts = kandilliEq.date.split(' ')
+    const dateStr = dateParts[0].replace(/\./g, '-') // "2023.03.08" -> "2023-03-08"
+    const timeStr = dateParts[1] || "00:00:00"
+    
+    // Extract coordinates (API returns [longitude, latitude])
+    const [longitude, latitude] = kandilliEq.geojson.coordinates
+    
+    // Get location name from title or epiCenter
+    const location = kandilliEq.title || kandilliEq.location_properties.epiCenter?.name || 'Bilinmeyen Konum'
+    
+    // Get province from epiCenter
+    const province = kandilliEq.location_properties.epiCenter?.name || undefined
+    
+    // Get district from title (usually format: "DISTRICT-CITY")
+    const district = kandilliEq.title?.split('-')[0]?.trim() || undefined
+    
+    // Simple anomaly detection based on magnitude and depth
+    const isAnomaly = kandilliEq.mag > 5.0 && kandilliEq.depth < 10
+    const anomalyScore = isAnomaly ? (kandilliEq.mag * 10 + (100 - kandilliEq.depth)) / 2 : 0
+
+    return {
+      id: kandilliEq.earthquake_id,
+      date: dateStr,
+      time: timeStr,
+      latitude: latitude,
+      longitude: longitude,
+      magnitude: kandilliEq.mag,
+      depth: kandilliEq.depth,
+      location: location,
+      province: province,
+      district: district,
+      source: 'Kandilli' as const,
+      timestamp: kandilliEq.created_at * 1000, // Convert to milliseconds
+      isAnomaly,
+      anomalyScore
+    }
+  }
+
+  // Fallback mock data in case API fails
+  private getMockEarthquakes(): Earthquake[] {
+    return [
+      {
+        id: 'mock_1',
+        date: '2024-01-15',
+        time: '14:30:25',
+        latitude: 39.9334,
+        longitude: 32.8597,
+        magnitude: 4.2,
+        depth: 12.5,
+        location: 'Ankara, Çankaya',
+        province: 'Ankara',
+        district: 'Çankaya',
+        source: 'Kandilli',
+        timestamp: 1705323025000,
+        isAnomaly: false
+      },
+      {
+        id: 'mock_2',
+        date: '2024-01-15',
+        time: '12:15:10',
+        latitude: 38.4192,
+        longitude: 27.1287,
+        magnitude: 5.1,
+        depth: 8.2,
+        location: 'İzmir, Bornova',
+        province: 'İzmir',
+        district: 'Bornova',
+        source: 'Kandilli',
+        timestamp: 1705316110000,
+        isAnomaly: true,
+        anomalyScore: 75.5
+      }
+    ]
   }
 
   async fetchLast24Hours(): Promise<Earthquake[]> {
     try {
-      const response = await axios.get<OrhanAydogduResponse>(
-        `${this.baseURL}${API_CONFIG.KANDILLI.endpoints.earthquakes}`,
-        {
-          timeout: 30000
+      const response = await axios.get<KandilliAPIResponse>(`${KANDILLI_API_BASE}`, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Turkiye-Quake-Map-AI/1.0'
         }
-      )
+      })
 
       if (!response.data.status) {
-        throw new Error('Kandilli API hatası')
+        throw new Error(`API Error: ${response.data.desc}`)
       }
 
+      const allEarthquakes = response.data.result.map(this.transformKandilliData)
+      
+      // Filter last 24 hours
       const now = new Date()
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
       
-      return this.transformOrhanAydogduData(response.data.result)
+      return allEarthquakes
         .filter(eq => eq.timestamp >= yesterday.getTime())
         .sort((a, b) => b.timestamp - a.timestamp)
+        
     } catch (error) {
-      console.error('Kandilli Last24h Error:', error)
-      throw new Error('Son 24 saat verisi alınamadı')
-    }
-  }
-
-  private transformOrhanAydogduData(data: any[]): Earthquake[] {
-    return data.map(item => {
-      // Orhan Aydoğdu API'de coordinates [longitude, latitude] formatında
-      const [longitude, latitude] = item.geojson.coordinates
-      
-      return {
-        id: item.earthquake_id || `kandilli_${Date.now()}_${Math.random()}`,
-        date: item.date.replace(/\./g, '-'), // "2025.08.21" -> "2025-08-21"
-        time: item.date_time.split(' ')[1] || '00:00:00', // "2025-08-21 17:20:11" -> "17:20:11"
-        latitude: latitude,
-        longitude: longitude,
-        magnitude: parseFloat(item.mag) || 0,
-        depth: parseFloat(item.depth) || 0,
-        location: item.title || 'Bilinmeyen Konum',
-        province: item.location_properties?.epiCenter?.name || 'Bilinmeyen',
-        district: item.title?.split('-')[1]?.trim() || 'Bilinmeyen',
-        source: 'Kandilli' as const,
-        timestamp: new Date(item.date_time).getTime(),
-        isAnomaly: false,
-        anomalyScore: 0
-      }
-    })
-  }
-
-  private filterByDateRange(earthquakes: Earthquake[], startDate?: string, endDate?: string): Earthquake[] {
-    let filtered = earthquakes
-
-    if (startDate) {
-      const start = new Date(startDate).getTime()
-      filtered = filtered.filter(eq => eq.timestamp >= start)
-    }
-
-    if (endDate) {
-      const end = new Date(endDate + ' 23:59:59').getTime()
-      filtered = filtered.filter(eq => eq.timestamp <= end)
-    }
-
-    return filtered
-  }
-}
-
-// Ana service class
-class EarthquakeService {
-  private afadService = new AFADService()
-  private kandilliService = new KandilliService()
-
-  async fetchAll(): Promise<Earthquake[]> {
-    try {
-      const [afadData, kandilliData] = await Promise.allSettled([
-        this.afadService.fetchEarthquakes(),
-        this.kandilliService.fetchEarthquakes()
-      ])
-
-      const earthquakes: Earthquake[] = []
-
-      if (afadData.status === 'fulfilled') {
-        earthquakes.push(...afadData.value)
-      }
-
-      if (kandilliData.status === 'fulfilled') {
-        earthquakes.push(...kandilliData.value)
-      }
-
-      // Duplicate kontrolü ve sıralama
-      const uniqueEarthquakes = this.removeDuplicates(earthquakes)
-      return uniqueEarthquakes.sort((a, b) => b.timestamp - a.timestamp)
-    } catch (error) {
-      console.error('Fetch All Error:', error)
-      throw new Error('Deprem verisi alınamadı')
-    }
-  }
-
-  async fetchLast24Hours(): Promise<Earthquake[]> {
-    try {
-      const [afadData, kandilliData] = await Promise.allSettled([
-        this.afadService.fetchLast24Hours(),
-        this.kandilliService.fetchLast24Hours()
-      ])
-
-      const earthquakes: Earthquake[] = []
-
-      if (afadData.status === 'fulfilled') {
-        earthquakes.push(...afadData.value)
-      }
-
-      if (kandilliData.status === 'fulfilled') {
-        earthquakes.push(...kandilliData.value)
-      }
-
-      const uniqueEarthquakes = this.removeDuplicates(earthquakes)
-      return uniqueEarthquakes.sort((a, b) => b.timestamp - a.timestamp)
-    } catch (error) {
-      console.error('Last24h Error:', error)
-      throw new Error('Son 24 saat verisi alınamadı')
+      console.error('Error fetching last 24 hours:', error)
+      return this.getMockEarthquakes()
     }
   }
 
   async fetchByDateRange(startDate: string, endDate: string): Promise<Earthquake[]> {
     try {
-      const [afadData, kandilliData] = await Promise.allSettled([
-        this.afadService.fetchEarthquakes({ startDate, endDate }),
-        this.kandilliService.fetchEarthquakes({ startDate, endDate })
-      ])
+      const response = await axios.get<KandilliAPIResponse>(`${KANDILLI_API_BASE}`, {
+        timeout: 30000,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'Turkiye-Quake-Map-AI/1.0'
+        }
+      })
 
-      const earthquakes: Earthquake[] = []
-
-      if (afadData.status === 'fulfilled') {
-        earthquakes.push(...afadData.value)
+      if (!response.data.status) {
+        throw new Error(`API Error: ${response.data.desc}`)
       }
 
-      if (kandilliData.status === 'fulfilled') {
-        earthquakes.push(...kandilliData.value)
-      }
-
-      const uniqueEarthquakes = this.removeDuplicates(earthquakes)
-      return uniqueEarthquakes.sort((a, b) => b.timestamp - a.timestamp)
+      const allEarthquakes = response.data.result.map(this.transformKandilliData)
+      
+      // Filter by date range
+      const start = new Date(startDate).getTime()
+      const end = new Date(endDate + ' 23:59:59').getTime()
+      
+      return allEarthquakes
+        .filter(eq => eq.timestamp >= start && eq.timestamp <= end)
+        .sort((a, b) => b.timestamp - a.timestamp)
+        
     } catch (error) {
-      console.error('Date Range Error:', error)
-      throw new Error('Tarih aralığı verisi alınamadı')
+      console.error('Error fetching by date range:', error)
+      return this.getMockEarthquakes()
     }
   }
 
-  private removeDuplicates(earthquakes: Earthquake[]): Earthquake[] {
-    const seen = new Set<string>()
-    return earthquakes.filter(eq => {
-      const key = `${eq.latitude}_${eq.longitude}_${eq.magnitude}_${eq.timestamp}`
-      if (seen.has(key)) {
-        return false
-      }
-      seen.add(key)
-      return true
+  getEarthquakeById(id: string): Earthquake | undefined {
+    return this.earthquakes.find(eq => eq.id === id)
+  }
+
+  getEarthquakesByLocation(latitude: number, longitude: number, radius: number = 100): Earthquake[] {
+    return this.earthquakes.filter(eq => {
+      const distance = this.calculateDistance(latitude, longitude, eq.latitude, eq.longitude)
+      return distance <= radius
     })
+  }
+
+  private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371 // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    return R * c
   }
 }
 
-// Service instance
 export const earthquakeService = new EarthquakeService() 

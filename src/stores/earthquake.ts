@@ -1,18 +1,51 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { Earthquake, FilterOptions } from '@/types'
+import { create } from 'zustand'
+import type { Earthquake } from '@/types'
 import { earthquakeService } from '@/services/earthquakeService'
 
-export const useEarthquakeStore = defineStore('earthquake', () => {
+interface EarthquakeState {
   // State
-  const earthquakes = ref<Earthquake[]>([])
-  const filteredEarthquakes = ref<Earthquake[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
-  const lastUpdate = ref<Date | null>(null)
-  
-  // Filtreler
-  const filters = ref<FilterOptions>({
+  earthquakes: Earthquake[]
+  filteredEarthquakes: Earthquake[]
+  totalCount: number
+  anomalyCount: number
+  isLoading: boolean
+  error: string | null
+  filters: {
+    minMagnitude: number
+    maxMagnitude: number
+    minDepth: number
+    maxDepth: number
+    dateRange: {
+      start: Date | null
+      end: Date | null
+    }
+    sources: ('Kandilli')[] // Updated to only support Kandilli
+    showAnomalies: boolean
+  }
+
+  // Actions
+  fetchEarthquakes: () => Promise<void>
+  setEarthquakes: (earthquakes: Earthquake[]) => void
+  addEarthquake: (earthquake: Earthquake) => void
+  updateEarthquake: (id: string, updates: Partial<Earthquake>) => void
+  removeEarthquake: (id: string) => void
+  setLoading: (loading: boolean) => void
+  setError: (error: string | null) => void
+  updateFilters: (filters: Partial<EarthquakeState['filters']>) => void
+  applyFilters: () => void
+  clearFilters: () => void
+  detectAnomalies: () => void
+}
+
+export const useEarthquakeStore = create<EarthquakeState>((set, get) => ({
+  // Initial state
+  earthquakes: [],
+  filteredEarthquakes: [],
+  totalCount: 0,
+  anomalyCount: 0,
+  isLoading: false,
+  error: null,
+  filters: {
     minMagnitude: 0,
     maxMagnitude: 10,
     minDepth: 0,
@@ -21,117 +54,112 @@ export const useEarthquakeStore = defineStore('earthquake', () => {
       start: null,
       end: null
     },
-    sources: ['AFAD', 'Kandilli'],
+    sources: ['Kandilli'], // Updated to only support Kandilli
     showAnomalies: false
-  })
-
-  // Getters
-  const totalCount = computed(() => earthquakes.value.length)
-  const anomalyCount = computed(() => earthquakes.value.filter(eq => eq.isAnomaly).length)
-  const latestEarthquakes = computed(() => 
-    [...earthquakes.value]
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 10)
-  )
-  
-  const strongestEarthquakes = computed(() => 
-    [...earthquakes.value]
-      .sort((a, b) => b.magnitude - a.magnitude)
-      .slice(0, 5)
-  )
+  },
 
   // Actions
-  const fetchEarthquakes = async () => {
+  fetchEarthquakes: async () => {
     try {
-      isLoading.value = true
-      error.value = null
-      
-      const data = await earthquakeService.fetchAll()
-      earthquakes.value = data
-      lastUpdate.value = new Date()
-      
-      applyFilters()
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Deprem verisi alınamadı'
-      console.error('Error fetching earthquakes:', err)
+      set({ isLoading: true, error: null })
+      const earthquakes = await earthquakeService.fetchEarthquakes()
+      set({ 
+        earthquakes, 
+        filteredEarthquakes: earthquakes,
+        totalCount: earthquakes.length,
+        anomalyCount: earthquakes.filter(eq => eq.isAnomaly).length
+      })
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Unknown error' })
     } finally {
-      isLoading.value = false
+      set({ isLoading: false })
     }
-  }
+  },
 
-  const addEarthquake = (earthquake: Earthquake) => {
-    // Duplicate kontrolü
-    const exists = earthquakes.value.find(eq => eq.id === earthquake.id)
-    if (!exists) {
-      earthquakes.value.unshift(earthquake)
-      applyFilters()
+  setEarthquakes: (earthquakes) => set({ 
+    earthquakes, 
+    filteredEarthquakes: earthquakes,
+    totalCount: earthquakes.length 
+  }),
+
+  addEarthquake: (earthquake) => set((state) => {
+    const newEarthquakes = [earthquake, ...state.earthquakes]
+    return {
+      earthquakes: newEarthquakes,
+      filteredEarthquakes: newEarthquakes,
+      totalCount: newEarthquakes.length
     }
-  }
+  }),
 
-  const updateEarthquake = (id: string, updates: Partial<Earthquake>) => {
-    const index = earthquakes.value.findIndex(eq => eq.id === id)
-    if (index !== -1) {
-      earthquakes.value[index] = { ...earthquakes.value[index], ...updates }
-      applyFilters()
+  updateEarthquake: (id, updates) => set((state) => {
+    const updatedEarthquakes = state.earthquakes.map(eq => 
+      eq.id === id ? { ...eq, ...updates } : eq
+    )
+    return {
+      earthquakes: updatedEarthquakes,
+      filteredEarthquakes: updatedEarthquakes
     }
-  }
+  }),
 
-  const removeEarthquake = (id: string) => {
-    const index = earthquakes.value.findIndex(eq => eq.id === id)
-    if (index !== -1) {
-      earthquakes.value.splice(index, 1)
-      applyFilters()
+  removeEarthquake: (id) => set((state) => {
+    const filteredEarthquakes = state.earthquakes.filter(eq => eq.id !== id)
+    return {
+      earthquakes: filteredEarthquakes,
+      filteredEarthquakes,
+      totalCount: filteredEarthquakes.length
     }
-  }
+  }),
 
-  const applyFilters = () => {
-    let filtered = [...earthquakes.value]
+  setLoading: (loading) => set({ isLoading: loading }),
 
-    // Magnitude filtresi
+  setError: (error) => set({ error }),
+
+  updateFilters: (newFilters) => set((state) => ({
+    filters: { ...state.filters, ...newFilters }
+  })),
+
+  applyFilters: () => {
+    const { earthquakes, filters } = get()
+    let filtered = earthquakes
+
+    // Magnitude filter
     filtered = filtered.filter(eq => 
-      eq.magnitude >= filters.value.minMagnitude && 
-      eq.magnitude <= filters.value.maxMagnitude
+      eq.magnitude >= filters.minMagnitude && eq.magnitude <= filters.maxMagnitude
     )
 
-    // Depth filtresi
+    // Depth filter
     filtered = filtered.filter(eq => 
-      eq.depth >= filters.value.minDepth && 
-      eq.depth <= filters.value.maxDepth
+      eq.depth >= filters.minDepth && eq.depth <= filters.maxDepth
     )
 
-    // Source filtresi
-    filtered = filtered.filter(eq => 
-      filters.value.sources.includes(eq.source)
-    )
-
-    // Date range filtresi
-    if (filters.value.dateRange.start) {
+    // Date range filter
+    if (filters.dateRange.start) {
       filtered = filtered.filter(eq => 
-        new Date(eq.date) >= filters.value.dateRange.start!
+        new Date(eq.date) >= filters.dateRange.start!
       )
     }
-    
-    if (filters.value.dateRange.end) {
+    if (filters.dateRange.end) {
       filtered = filtered.filter(eq => 
-        new Date(eq.date) <= filters.value.dateRange.end!
+        new Date(eq.date) <= filters.dateRange.end!
       )
     }
 
-    // Anomali filtresi
-    if (filters.value.showAnomalies) {
+    // Source filter (only Kandilli for now)
+    filtered = filtered.filter(eq => filters.sources.includes(eq.source))
+
+    // Anomaly filter
+    if (filters.showAnomalies) {
       filtered = filtered.filter(eq => eq.isAnomaly)
     }
 
-    filteredEarthquakes.value = filtered
-  }
+    set({ 
+      filteredEarthquakes: filtered,
+      anomalyCount: filtered.filter(eq => eq.isAnomaly).length
+    })
+  },
 
-  const updateFilters = (newFilters: Partial<FilterOptions>) => {
-    filters.value = { ...filters.value, ...newFilters }
-    applyFilters()
-  }
-
-  const clearFilters = () => {
-    filters.value = {
+  clearFilters: () => set((state) => ({
+    filters: {
       minMagnitude: 0,
       maxMagnitude: 10,
       minDepth: 0,
@@ -140,65 +168,37 @@ export const useEarthquakeStore = defineStore('earthquake', () => {
         start: null,
         end: null
       },
-      sources: ['AFAD', 'Kandilli'],
+      sources: ['Kandilli'], // Updated to only support Kandilli
       showAnomalies: false
-    }
-    applyFilters()
-  }
+    },
+    filteredEarthquakes: state.earthquakes
+  })),
 
-  const getEarthquakeById = (id: string) => {
-    return earthquakes.value.find(eq => eq.id === id)
-  }
+  detectAnomalies: () => {
+    // Simple anomaly detection based on magnitude and depth
+    const { earthquakes } = get()
+    const updatedEarthquakes = earthquakes.map(eq => {
+      const isAnomaly = eq.magnitude > 5.0 && eq.depth < 10
+      const anomalyScore = isAnomaly ? (eq.magnitude * 10 + (100 - eq.depth)) / 2 : 0
+      
+      return {
+        ...eq,
+        isAnomaly,
+        anomalyScore
+      }
+    })
 
-  const getEarthquakesByLocation = (latitude: number, longitude: number, radius: number = 100) => {
-    return earthquakes.value.filter(eq => {
-      const distance = calculateDistance(
-        latitude, 
-        longitude, 
-        eq.latitude, 
-        eq.longitude
-      )
-      return distance <= radius
+    set({ 
+      earthquakes: updatedEarthquakes,
+      filteredEarthquakes: updatedEarthquakes,
+      anomalyCount: updatedEarthquakes.filter(eq => eq.isAnomaly).length
     })
   }
+}))
 
-  // Yardımcı fonksiyonlar
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371 // Dünya yarıçapı (km)
-    const dLat = (lat2 - lat1) * Math.PI / 180
-    const dLon = (lon2 - lon1) * Math.PI / 180
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-      Math.sin(dLon/2) * Math.sin(dLon/2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-    return R * c
-  }
-
-  return {
-    // State
-    earthquakes,
-    filteredEarthquakes,
-    isLoading,
-    error,
-    lastUpdate,
-    filters,
-    
-    // Getters
-    totalCount,
-    anomalyCount,
-    latestEarthquakes,
-    strongestEarthquakes,
-    
-    // Actions
-    fetchEarthquakes,
-    addEarthquake,
-    updateEarthquake,
-    removeEarthquake,
-    applyFilters,
-    updateFilters,
-    clearFilters,
-    getEarthquakeById,
-    getEarthquakesByLocation
-  }
-}) 
+// Selectors
+export const useEarthquakes = () => useEarthquakeStore((state) => state.earthquakes)
+export const useFilteredEarthquakes = () => useEarthquakeStore((state) => state.filteredEarthquakes)
+export const useEarthquakeFilters = () => useEarthquakeStore((state) => state.filters)
+export const useEarthquakeLoading = () => useEarthquakeStore((state) => state.isLoading)
+export const useEarthquakeError = () => useEarthquakeStore((state) => state.error) 

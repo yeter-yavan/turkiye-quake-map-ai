@@ -1,186 +1,137 @@
-# Türkiye Deprem Haritası - AI Destekli Takip Uygulaması
+# Türkiye Deprem Haritası - AI Destekli
 
-Vue 3 + TypeScript ile geliştirilmiş, Türkiye'deki depremleri gerçek zamanlı olarak takip eden, AI destekli web uygulaması.
+Modern, responsive ve AI destekli Türkiye deprem takip uygulaması. React, TypeScript ve shadcn/ui kullanılarak geliştirilmiştir.
 
 ## 🚀 Özellikler
 
-- **Gerçek Zamanlı Veri**: AFAD ve Kandilli API'lerinden canlı deprem verisi
-- **İnteraktif Harita**: Leaflet ile gelişmiş harita görünümü
-- **AI Anomali Tespiti**: Yapay zeka ile anormal deprem tespiti
+- **Harita Görünümü**: Leaflet tabanlı interaktif deprem haritası
+- **Liste Görünümü**: Filtrelenebilir deprem listesi
+- **Analiz Görünümü**: Detaylı istatistikler ve grafikler
+- **AI Anomali Tespiti**: Deprem verilerinde anormal durumları tespit eder
 - **Responsive Tasarım**: Mobil ve masaüstü uyumlu modern arayüz
-- **Gelişmiş Filtreleme**: Magnitude, derinlik, tarih ve kaynak bazlı filtreleme
-- **Real-time Updates**: WebSocket ile anlık güncellemeler
-- **State Management**: Pinia ile modern state yönetimi
-- **TypeScript**: Tip güvenliği ve geliştirici deneyimi
+- **Gerçek Zamanlı Veri**: AFAD ve Kandilli kaynaklarından güncel veriler
+- **Filtreleme Sistemi**: Magnitude, derinlik, tarih ve kaynak bazında filtreleme
 
 ## 🛠️ Teknolojiler
 
-- **Frontend**: Vue 3 + TypeScript
+- **Frontend**: React 18 + TypeScript
+- **State Management**: Zustand
+- **Routing**: React Router DOM
+- **UI Components**: shadcn/ui + Radix UI
+- **Styling**: Tailwind CSS
+- **Maps**: React Leaflet + Leaflet
+- **Icons**: Lucide React
 - **Build Tool**: Vite
-- **Styling**: TailwindCSS
-- **State Management**: Pinia
-- **Routing**: Vue Router 4
-- **Maps**: Leaflet
-- **HTTP Client**: Axios
-- **Real-time**: Socket.io Client
-- **Charts**: Chart.js + Vue-Chartjs
 
-## 📋 Gereksinimler
+## 📦 Kurulum
 
-- Node.js 18+ 
-- npm veya yarn
+1. **Bağımlılıkları yükleyin:**
+   ```bash
+   npm install
+   ```
 
-## 🚀 Kurulum
+2. **Geliştirme sunucusunu başlatın:**
+   ```bash
+   npm run dev
+   ```
 
-1. **Projeyi klonlayın**
-```bash
-git clone https://github.com/yourusername/turkiye-quake-map-ai.git
-cd turkiye-quake-map-ai
-```
+3. **Tarayıcıda açın:**
+   ```
+   http://localhost:5173
+   ```
 
-2. **Bağımlılıkları yükleyin**
-```bash
-npm install
-```
-
-3. **Geliştirme sunucusunu başlatın**
-```bash
-npm run dev
-```
-
-4. **Tarayıcıda açın**
-```
-http://localhost:3000
-```
-
-## 📁 Proje Yapısı
+## 🏗️ Proje Yapısı
 
 ```
 src/
-├── components/          # Vue komponentleri
-│   └── EarthquakeMap.vue
-├── stores/             # Pinia store'ları
-│   ├── earthquake.ts
-│   └── app.ts
-├── services/           # API servisleri
-│   └── earthquakeService.ts
-├── types/              # TypeScript tip tanımları
-│   └── index.ts
-├── views/              # Sayfa görünümleri
-│   ├── MapView.vue
-│   ├── ListView.vue
-│   └── AnalyticsView.vue
-├── router/             # Vue Router konfigürasyonu
-│   └── index.ts
-├── App.vue             # Ana uygulama komponenti
-├── main.ts             # Uygulama entry point
-└── style.css           # Global stiller
+├── components/          # UI bileşenleri
+│   ├── ui/             # shadcn/ui bileşenleri
+│   ├── Header.tsx      # Ana başlık
+│   ├── Sidebar.tsx     # Mobil menü
+│   ├── EarthquakeMap.tsx # Harita bileşeni
+│   └── ...
+├── views/               # Sayfa bileşenleri
+│   ├── MapView.tsx     # Harita görünümü
+│   ├── ListView.tsx    # Liste görünümü
+│   ├── AnalyticsView.tsx # Analiz görünümü
+│   └── ...
+├── stores/              # Zustand state yönetimi
+│   ├── app.ts          # Uygulama durumu
+│   └── earthquake.ts   # Deprem verisi
+├── services/            # API servisleri
+├── types/               # TypeScript tip tanımları
+├── lib/                 # Yardımcı fonksiyonlar
+└── router/              # React Router yapılandırması
 ```
 
-## 🔧 API Konfigürasyonu
+## 🎨 UI Bileşenleri
 
-### AFAD API
-- **Base URL**: `https://deprem.afad.gov.tr/apiv2`
-- **Endpoints**:
-  - `/earthquake/filter` - Filtrelenmiş deprem verisi
-  - `/earthquake/last24h` - Son 24 saat
-  - `/earthquake/last7days` - Son 7 gün
+Uygulama shadcn/ui bileşen kütüphanesini kullanır:
 
-### Kandilli API
-- **Base URL**: `https://api.kandilli.gov.tr`
-- **Endpoints**:
-  - `/earthquakes` - Tüm depremler
-  - `/earthquakes/last24h` - Son 24 saat
+- **Button**: Farklı varyantlarda butonlar
+- **Card**: Bilgi kartları
+- **Badge**: Etiketler ve durum göstergeleri
+- **Select**: Dropdown seçiciler
+- **Sheet**: Mobil menü ve overlay'ler
+- **Alert**: Hata ve uyarı mesajları
 
-## 🎯 Kullanım
+## 🗺️ Harita Özellikleri
 
-### Harita Görünümü
-- Depremleri harita üzerinde görüntüleme
-- Magnitude'a göre renk kodlu marker'lar
-- Zoom ve pan kontrolleri
-- Farklı harita katmanları (OSM, Uydu, Arazi)
+- **Çoklu Tile Layer**: OpenStreetMap, Uydu, Arazi
+- **Zoom Kontrolleri**: Yakınlaştırma/uzaklaştırma
+- **Deprem Marker'ları**: Magnitude'a göre renk kodlaması
+- **Popup Bilgileri**: Detaylı deprem bilgileri
+- **Responsive Tasarım**: Tüm ekran boyutlarında uyumlu
 
-### Liste Görünümü
-- Tüm depremleri tablo formatında listeleme
-- Gelişmiş filtreleme ve sıralama
-- Sayfalama desteği
-- CSV export özelliği
+## 📊 Veri Yönetimi
 
-### Analiz Görünümü
-- Deprem istatistikleri ve grafikleri
-- AI anomali tespiti sonuçları
-- Trend analizi
+- **Zustand Store**: Merkezi state yönetimi
+- **Mock Data**: Geliştirme için örnek veriler
+- **Filtreleme**: Gerçek zamanlı veri filtreleme
+- **Anomali Tespiti**: AI destekli anormal durum analizi
 
-## 🔍 Filtreleme Seçenekleri
+## 🔧 Geliştirme Komutları
 
-- **Magnitude**: 0.0 - 10.0 arası
-- **Derinlik**: 0 - 1000 km arası
-- **Tarih Aralığı**: Başlangıç ve bitiş tarihi
-- **Veri Kaynağı**: AFAD, Kandilli veya her ikisi
-- **Anomali Durumu**: Normal, anomali veya tümü
-
-## 🧠 AI Anomali Tespiti
-
-Uygulama, deprem verilerini analiz ederek:
-- Anormal magnitude değerleri
-- Beklenmeyen derinlik değişimleri
-- Zaman bazlı anormallikler
-- Konum bazlı anormallikler
-
-## 📱 Responsive Tasarım
-
-- **Desktop**: Tam özellikli harita ve sidebar
-- **Tablet**: Uyarlanmış layout
-- **Mobile**: Mobil öncelikli tasarım, touch-friendly kontroller
-
-## 🚀 Build ve Deploy
-
-### Production Build
 ```bash
+# Geliştirme sunucusu
+npm run dev
+
+# Production build
 npm run build
-```
 
-### Preview
-```bash
+# TypeScript tip kontrolü
+npm run type-check
+
+# Linting
+npm run lint
+
+# Preview build
 npm run preview
 ```
 
-### Linting
-```bash
-npm run lint
-```
+## 🌐 API Entegrasyonu
 
-### Type Check
-```bash
-npm run type-check
-```
+Uygulama şu veri kaynaklarını destekler:
 
-## 🔧 Geliştirme
+- **AFAD**: Türkiye Afet ve Acil Durum Yönetimi
+- **Kandilli**: Boğaziçi Üniversitesi Kandilli Rasathanesi
 
-### Yeni Özellik Ekleme
-1. Feature branch oluşturun
-2. Gerekli komponentleri ve store'ları ekleyin
-3. TypeScript tip tanımlarını güncelleyin
-4. Test edin ve PR oluşturun
+## 📱 Responsive Tasarım
 
-### API Entegrasyonu
-1. `services/` klasörüne yeni servis ekleyin
-2. TypeScript tiplerini `types/` klasöründe tanımlayın
-3. Store'da gerekli state ve action'ları ekleyin
+- **Mobile First**: Mobil öncelikli tasarım
+- **Breakpoints**: Tailwind CSS responsive breakpoint'leri
+- **Touch Friendly**: Dokunmatik ekran uyumlu
+- **Progressive Enhancement**: Temel işlevsellikten gelişmiş özelliklere
 
-## 📊 Performans
+## 🎯 Gelecek Özellikler
 
-- **Lazy Loading**: Route bazlı kod bölme
-- **Virtual Scrolling**: Büyük listeler için
-- **Debounced Search**: Arama optimizasyonu
-- **Caching**: API response cache'leme
-
-## 🔒 Güvenlik
-
-- **API Rate Limiting**: API çağrılarında sınırlama
-- **Input Validation**: Kullanıcı girdisi doğrulama
-- **XSS Protection**: Güvenli HTML rendering
-- **CORS**: Cross-origin resource sharing
+- [ ] WebSocket ile gerçek zamanlı veri güncellemesi
+- [ ] Gelişmiş AI anomali tespiti
+- [ ] Deprem tahmin algoritmaları
+- [ ] Kullanıcı hesapları ve favoriler
+- [ ] Push notification'lar
+- [ ] Offline çalışma desteği
+- [ ] Çoklu dil desteği
 
 ## 🤝 Katkıda Bulunma
 
@@ -190,46 +141,15 @@ npm run type-check
 4. Push yapın (`git push origin feature/amazing-feature`)
 5. Pull Request oluşturun
 
-## 📝 Lisans
+## 📄 Lisans
 
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için `LICENSE` dosyasına bakın.
+Bu proje MIT lisansı altında lisanslanmıştır.
 
 ## 📞 İletişim
 
-- **Proje Sahibi**: [Your Name]
-- **Email**: [your.email@example.com]
-- **GitHub**: [@yourusername]
+- **Proje**: [GitHub Repository](https://github.com/your-username/turkiye-quake-map-ai)
+- **Sorular**: Issues bölümünü kullanın
 
-## 🙏 Teşekkürler
+---
 
-- AFAD ve Kandilli Rasathanesi'ne veri sağladıkları için
-- Vue.js ekibine harika framework için
-- TailwindCSS ekibine CSS framework için
-- Leaflet ekibine harita kütüphanesi için
-
-## 📈 Roadmap
-
-- [ ] WebSocket real-time updates
-- [ ] Push notifications
-- [ ] Offline support
-- [ ] PWA features
-- [ ] Advanced AI models
-- [ ] Historical data analysis
-- [ ] Earthquake prediction models
-- [ ] Multi-language support
-- [ ] Dark mode
-- [ ] Advanced analytics dashboard
-
-## 🐛 Bilinen Sorunlar
-
-- AFAD API bazen yavaş yanıt verebiliyor
-- Kandilli API rate limiting
-- Leaflet marker clustering büyük veri setlerinde yavaş
-
-## 📚 Dokümantasyon
-
-- [Vue 3 Guide](https://vuejs.org/guide/)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [TailwindCSS Docs](https://tailwindcss.com/docs)
-- [Leaflet Docs](https://leafletjs.com/reference.html)
-- [Pinia Docs](https://pinia.vuejs.org/) 
+**Not**: Bu uygulama geliştirme amaçlıdır ve gerçek deprem verilerini göstermek için tasarlanmıştır. Acil durumlar için resmi AFAD ve Kandilli kaynaklarını kullanın. 

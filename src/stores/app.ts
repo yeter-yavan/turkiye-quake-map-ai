@@ -1,111 +1,83 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import type { AppState, MapConfig } from '@/types'
+import { create } from 'zustand'
+import type { MapConfig } from '@/types'
 
-export const useAppStore = defineStore('app', () => {
+interface AppState {
   // State
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
-  const lastUpdate = ref<Date | null>(null)
-  const connectionStatus = ref<'connected' | 'disconnected' | 'connecting'>('disconnected')
-  
-  // Harita konfigürasyonu
-  const mapConfig = ref<MapConfig>({
+  isLoading: boolean
+  error: string | null
+  lastUpdate: Date | null
+  connectionStatus: 'connected' | 'disconnected' | 'connecting'
+  mapConfig: MapConfig
+  sidebarOpen: boolean
+  filtersOpen: boolean
+  selectedEarthquake: string | null
+  viewMode: 'map' | 'list' | 'analytics'
+
+  // Actions
+  setLoading: (loading: boolean) => void
+  setError: (err: string | null) => void
+  clearError: () => void
+  setConnectionStatus: (status: 'connected' | 'disconnected' | 'connecting') => void
+  updateMapConfig: (config: Partial<MapConfig>) => void
+  resetMapConfig: () => void
+  toggleSidebar: () => void
+  toggleFilters: () => void
+  setSelectedEarthquake: (id: string | null) => void
+  setViewMode: (mode: 'map' | 'list' | 'analytics') => void
+  updateLastUpdate: () => void
+}
+
+export const useAppStore = create<AppState>((set) => ({
+  // Initial state
+  isLoading: false,
+  error: null,
+  lastUpdate: null,
+  connectionStatus: 'disconnected',
+  mapConfig: {
     center: [39.9334, 32.8597], // Ankara merkezi
     zoom: 6,
     minZoom: 5,
     maxZoom: 18
-  })
-
-  // UI durumu
-  const sidebarOpen = ref(false)
-  const filtersOpen = ref(false)
-  const selectedEarthquake = ref<string | null>(null)
-  const viewMode = ref<'map' | 'list' | 'analytics'>('map')
-
-  // Getters
-  const isConnected = computed(() => connectionStatus.value === 'connected')
-  const hasError = computed(() => error.value !== null)
-  const isMapView = computed(() => viewMode.value === 'map')
+  },
+  sidebarOpen: false,
+  filtersOpen: false,
+  selectedEarthquake: null,
+  viewMode: 'map',
 
   // Actions
-  const setLoading = (loading: boolean) => {
-    isLoading.value = loading
-  }
-
-  const setError = (err: string | null) => {
-    error.value = err
-  }
-
-  const clearError = () => {
-    error.value = null
-  }
-
-  const setConnectionStatus = (status: 'connected' | 'disconnected' | 'connecting') => {
-    connectionStatus.value = status
-  }
-
-  const updateMapConfig = (config: Partial<MapConfig>) => {
-    mapConfig.value = { ...mapConfig.value, ...config }
-  }
-
-  const resetMapConfig = () => {
-    mapConfig.value = {
+  setLoading: (loading) => set({ isLoading: loading }),
+  
+  setError: (err) => set({ error: err }),
+  
+  clearError: () => set({ error: null }),
+  
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
+  
+  updateMapConfig: (config) => set((state) => ({
+    mapConfig: { ...state.mapConfig, ...config }
+  })),
+  
+  resetMapConfig: () => set({
+    mapConfig: {
       center: [39.9334, 32.8597],
       zoom: 6,
       minZoom: 5,
       maxZoom: 18
     }
-  }
+  }),
+  
+  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+  
+  toggleFilters: () => set((state) => ({ filtersOpen: !state.filtersOpen })),
+  
+  setSelectedEarthquake: (id) => set({ selectedEarthquake: id }),
+  
+  setViewMode: (mode) => set({ viewMode: mode }),
+  
+  updateLastUpdate: () => set({ lastUpdate: new Date() })
+}))
 
-  const toggleSidebar = () => {
-    sidebarOpen.value = !sidebarOpen.value
-  }
-
-  const toggleFilters = () => {
-    filtersOpen.value = !filtersOpen.value
-  }
-
-  const setSelectedEarthquake = (id: string | null) => {
-    selectedEarthquake.value = id
-  }
-
-  const setViewMode = (mode: 'map' | 'list' | 'analytics') => {
-    viewMode.value = mode
-  }
-
-  const updateLastUpdate = () => {
-    lastUpdate.value = new Date()
-  }
-
-  return {
-    // State
-    isLoading,
-    error,
-    lastUpdate,
-    connectionStatus,
-    mapConfig,
-    sidebarOpen,
-    filtersOpen,
-    selectedEarthquake,
-    viewMode,
-    
-    // Getters
-    isConnected,
-    hasError,
-    isMapView,
-    
-    // Actions
-    setLoading,
-    setError,
-    clearError,
-    setConnectionStatus,
-    updateMapConfig,
-    resetMapConfig,
-    toggleSidebar,
-    toggleFilters,
-    setSelectedEarthquake,
-    setViewMode,
-    updateLastUpdate
-  }
-}) 
+// Selectors
+export const useIsConnected = () => useAppStore((state) => state.connectionStatus === 'connected')
+export const useHasError = () => useAppStore((state) => state.error !== null)
+export const useIsMapView = () => useAppStore((state) => state.viewMode === 'map') 

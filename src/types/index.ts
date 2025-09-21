@@ -10,96 +10,14 @@ export interface Earthquake {
   location: string
   province?: string
   district?: string
-  source: 'AFAD' | 'Kandilli'
+  source: 'Kandilli' // Updated to only support Kandilli for now
   timestamp: number
   isAnomaly?: boolean
   anomalyScore?: number
 }
 
-// AFAD API response tipi
-export interface AFADResponse {
-  data: Array<{
-    id: string
-    date: string
-    time: string
-    latitude: number
-    longitude: number
-    magnitude: number
-    depth: number
-    location: string
-    province?: string
-    district?: string
-  }>
-  success: boolean
-  message?: string
-}
-
-// Kandilli API response tipi
-export interface KandilliResponse {
-  data: Array<{
-    id: string
-    date: string
-    time: string
-    latitude: number
-    longitude: number
-    magnitude: number
-    depth: number
-    location: string
-    province?: string
-    district?: string
-  }>
-  success: boolean
-  message?: string
-}
-
-// Harita konfigürasyonu
-export interface MapConfig {
-  center: [number, number]
-  zoom: number
-  minZoom: number
-  maxZoom: number
-}
-
-// Filtre seçenekleri
-export interface FilterOptions {
-  minMagnitude: number
-  maxMagnitude: number
-  minDepth: number
-  maxDepth: number
-  dateRange: {
-    start: Date | null
-    end: Date | null
-  }
-  sources: ('AFAD' | 'Kandilli')[]
-  showAnomalies: boolean
-}
-
-// AI anomali tespiti sonucu
-export interface AnomalyDetection {
-  earthquakeId: string
-  score: number
-  isAnomaly: boolean
-  factors: string[]
-  confidence: number
-}
-
-// WebSocket mesaj tipleri
-export interface WebSocketMessage {
-  type: 'new_earthquake' | 'update_earthquake' | 'anomaly_detected' | 'system_status'
-  data: any
-  timestamp: number
-}
-
-// Uygulama durumu
-export interface AppState {
-  isLoading: boolean
-  error: string | null
-  lastUpdate: Date | null
-  connectionStatus: 'connected' | 'disconnected' | 'connecting'
-}
-
-// Orhan Aydoğdu API Response
-export interface OrhanAydogduResponse {
+// Kandilli API response tipi (Orhan Aydoğdu API)
+export interface KandilliAPIResponse {
   status: boolean
   httpStatus: number
   desc: string
@@ -109,11 +27,10 @@ export interface OrhanAydogduResponse {
     date_ends: string
     total: number
   }
-  result: OrhanAydogduEarthquake[]
+  result: KandilliEarthquake[]
 }
 
-export interface OrhanAydogduEarthquake {
-  _id: string
+export interface KandilliEarthquake {
   earthquake_id: string
   provider: string
   title: string
@@ -156,6 +73,52 @@ export interface OrhanAydogduEarthquake {
   date_time: string
   created_at: number
   location_tz: string
+}
+
+// Harita konfigürasyonu
+export interface MapConfig {
+  center: [number, number]
+  zoom: number
+  minZoom: number
+  maxZoom: number
+}
+
+// Filtre seçenekleri
+export interface FilterOptions {
+  minMagnitude: number
+  maxMagnitude: number
+  minDepth: number
+  maxDepth: number
+  dateRange: {
+    start: Date | null
+    end: Date | null
+  }
+  sources: ('Kandilli')[] // Updated to only support Kandilli
+  showAnomalies: boolean
+}
+
+// AI anomali tespiti sonucu
+export interface AnomalyDetection {
+  earthquakeId: string
+  score: number
+  isAnomaly: boolean
+  factors: string[]
+  confidence: number
+}
+
+// WebSocket mesaj tipleri
+export interface WebSocketMessage {
+  type: 'new_earthquake' | 'update_earthquake' | 'anomaly_detected' | 'system_status'
+  data: any
+  timestamp: number
+}
+
+// Uygulama durumu
+export interface AppState {
+  isLoading: boolean
+  error: string | null
+  lastUpdate: Date | null
+  connectionStatus: 'connected' | 'disconnected' | 'connecting'
 }
 
 // Deprem zonu tipleri
